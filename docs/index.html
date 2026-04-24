@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QOM Hunter</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<aside id="panel">
+  <h1>QOM Hunter</h1>
+  <p class="sub">Find soft Strava segments in and around NYC.</p>
+
+  <div class="field">
+    <label for="location">Location</label>
+    <input id="location" type="text" placeholder="e.g. Prospect Park, Brooklyn" autocomplete="off">
+    <button id="geocode-btn" type="button">Search</button>
+    <div id="geocode-status" class="hint"></div>
+  </div>
+
+  <div class="field">
+    <label for="radius">Radius: <span id="radius-val">2</span> km</label>
+    <input id="radius" type="range" min="0.5" max="15" step="0.5" value="2">
+  </div>
+
+  <div class="field">
+    <label>Sport</label>
+    <div class="seg-toggle">
+      <button type="button" class="sport-btn active" data-sport="Ride">Ride</button>
+      <button type="button" class="sport-btn" data-sport="Run">Run</button>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="record">Target</label>
+    <div class="seg-toggle">
+      <button type="button" class="record-btn active" data-record="qom">QOM</button>
+      <button type="button" class="record-btn" data-record="kom">KOM</button>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="dist-min">Distance: <span id="dist-min-val">0.1</span> to <span id="dist-max-val">5</span> km</label>
+    <input id="dist-min" type="range" min="0.1" max="10" step="0.1" value="0.1">
+    <input id="dist-max" type="range" min="0.1" max="10" step="0.1" value="5">
+  </div>
+
+  <div class="field" id="speed-field">
+    <label for="max-speed">Max QOM speed: <span id="max-speed-val">30</span> km/h</label>
+    <input id="max-speed" type="range" min="15" max="55" step="1" value="30">
+  </div>
+
+  <div class="field" id="pace-field" style="display:none">
+    <label for="min-pace">Min QOM pace: <span id="min-pace-val">4.0</span> min/km</label>
+    <input id="min-pace" type="range" min="2.5" max="7.0" step="0.1" value="4.0">
+  </div>
+
+  <div id="results-count">Enter a location to start.</div>
+  <div id="results"></div>
+
+  <p class="footer">
+    Data cached from Strava. QOM = Queen of the Mountain (women's course record). KOM = King (overall record). This tool is for discovery; segments are affected by traffic, wind, and GPS drift, so a slow record doesn't always mean a slow effort. Source on <a href="https://github.com/slippitty/qom_hunter">GitHub</a>.
+  </p>
+</aside>
+
+<div id="map"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -46,18 +46,36 @@ Segments where your estimated capability is within a few percent of the record a
 
 ```
 src/
-  auth.py        OAuth flow and token refresh
-  strava.py      Thin API client with rate limit handling
-  discover.py    Tile Brooklyn, call explore_segments, cache results
-  efforts.py     Pull your effort history and recent activities
-  power.py       Cycling power model
-  pace.py        Grade-adjusted pace model
-  score.py       Combine the above into a ranking
-  map.py         Render map.html with Leaflet
+  auth.py          OAuth flow and token refresh
+  strava.py        Thin API client with rate limit handling
+  discover.py      Tile Brooklyn, call explore_segments, cache results
+  efforts.py       Pull your effort history and recent activities
+  power.py         Cycling power model
+  pace.py          Grade-adjusted pace model
+  score.py         Combine the above into a ranking for you personally
+  map.py           Render map.html with Leaflet
+  build_dataset.py Build the shared public dataset for the web site
+docs/
+  index.html       Public site (served by GitHub Pages)
+  app.js
+  style.css
+  segments.json    (created by build_dataset, committed to repo)
 data/
-  tokens.json    (created on first run, gitignored)
-  segments.json  (created by discover, cached)
-  efforts.json   (created by efforts, cached)
-  scored.json    (created by score)
-  map.html       (created by map)
+  tokens.json      (created on first run, gitignored)
+  segments.json    (created by discover, cached, gitignored)
+  efforts.json     (created by efforts, cached, gitignored)
+  scored.json      (created by score, gitignored)
+  map.html         (created by map, gitignored)
 ```
+
+## Public web site
+
+To publish a public QOM Hunter site via GitHub Pages:
+
+1. Run `python -m src.build_dataset`. This scans the NYC region, fetches segment detail for each, and writes `docs/segments.json`. It is resumable; hitting Ctrl-C or the daily rate limit is safe, just re-run to continue. Expect 90 minutes to several hours depending on segment density.
+
+2. Commit and push `docs/segments.json` along with the rest of the `docs/` folder.
+
+3. On GitHub, go to Settings, Pages, and under "Build and deployment" set Source to "Deploy from a branch", Branch to "main", and folder to "/docs". Save. GitHub will publish the site at `https://YOUR_USERNAME.github.io/qom_hunter/` within a minute.
+
+The site loads segments.json client-side and filters entirely in the browser — no backend, no API keys exposed. To refresh the dataset, re-run `build_dataset` and push.

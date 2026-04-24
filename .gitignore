@@ -3,6 +3,7 @@ data/tokens.json
 data/segments.json
 data/efforts.json
 data/scored.json
+data/dataset_checkpoint.json
 data/map.html
 __pycache__/
 *.pyc
