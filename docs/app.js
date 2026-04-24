@@ -1,10 +1,13 @@
 // QOM Hunter frontend. Loads segments.json, handles filters, renders map.
+// Units: miles, mph for rides, min/mile for runs.
+
+const KM_PER_MI = 1.609344;
 
 const state = {
   segments: [],
   sport: "Ride",
   record: "qom",
-  center: null,        // [lat, lng], set after geocode
+  center: null,
   centerMarker: null,
   radiusCircle: null,
   segLayers: [],
@@ -16,7 +19,6 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: "&copy; OpenStreetMap",
 }).addTo(map);
 
-// --- load dataset ---
 fetch("segments.json")
   .then(r => r.json())
   .then(data => {
@@ -31,7 +33,6 @@ fetch("segments.json")
     console.error(err);
   });
 
-// --- range displays ---
 const $ = id => document.getElementById(id);
 function bindRange(inputId, valId, fmt = v => v) {
   const input = $(inputId), val = $(valId);
@@ -39,26 +40,23 @@ function bindRange(inputId, valId, fmt = v => v) {
   input.addEventListener("input", update);
   update();
 }
-bindRange("radius", "radius-val");
-bindRange("dist-min", "dist-min-val");
-bindRange("dist-max", "dist-max-val");
+bindRange("radius", "radius-val", v => (+v).toFixed(1));
+bindRange("dist-min", "dist-min-val", v => (+v).toFixed(2));
+bindRange("dist-max", "dist-max-val", v => (+v).toFixed(2));
 bindRange("max-speed", "max-speed-val");
 bindRange("min-pace", "min-pace-val", v => (+v).toFixed(1));
 
-// --- sport toggle ---
 document.querySelectorAll(".sport-btn").forEach(b => {
   b.addEventListener("click", () => {
     document.querySelectorAll(".sport-btn").forEach(x => x.classList.remove("active"));
     b.classList.add("active");
     state.sport = b.dataset.sport;
-    // runs show pace filter, rides show speed filter
     $("speed-field").style.display = state.sport === "Ride" ? "" : "none";
     $("pace-field").style.display = state.sport === "Run" ? "" : "none";
     rerender();
   });
 });
 
-// --- record toggle ---
 document.querySelectorAll(".record-btn").forEach(b => {
   b.addEventListener("click", () => {
     document.querySelectorAll(".record-btn").forEach(x => x.classList.remove("active"));
@@ -68,8 +66,6 @@ document.querySelectorAll(".record-btn").forEach(b => {
   });
 });
 
-// --- geocode using Nominatim (OSM). Free, no key, but rate-limited; for a
-// shared app we'd want a proper provider. For casual use it's fine. ---
 $("geocode-btn").addEventListener("click", doGeocode);
 $("location").addEventListener("keydown", e => { if (e.key === "Enter") doGeocode(); });
 
@@ -78,7 +74,6 @@ async function doGeocode() {
   if (!q) return;
   $("geocode-status").textContent = "Searching...";
   try {
-    // bias search to the NYC area with a viewbox
     const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&viewbox=-74.27,40.95,-73.70,40.50&bounded=1&q=${encodeURIComponent(q)}`;
     const r = await fetch(url, { headers: { "Accept-Language": "en" } });
     const hits = await r.json();
@@ -96,7 +91,6 @@ async function doGeocode() {
   }
 }
 
-// --- haversine distance in km between two [lat,lng] points ---
 function haversineKm(a, b) {
   const R = 6371;
   const [lat1, lon1] = a, [lat2, lon2] = b;
@@ -108,7 +102,6 @@ function haversineKm(a, b) {
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 
-// --- polyline decoder (Google algorithm) ---
 function decodePolyline(str) {
   let index = 0, lat = 0, lng = 0, coords = [];
   while (index < str.length) {
@@ -127,9 +120,15 @@ function decodePolyline(str) {
   return coords;
 }
 
-// --- main filter + render ---
+function formatPaceMinPerMile(minPerKm) {
+  const minPerMi = minPerKm * KM_PER_MI;
+  const mins = Math.floor(minPerMi);
+  const secs = Math.round((minPerMi - mins) * 60);
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+function kphToMph(kph) { return kph / KM_PER_MI; }
+
 function rerender() {
-  // clear old layers
   state.segLayers.forEach(l => map.removeLayer(l));
   state.segLayers = [];
   if (state.radiusCircle) map.removeLayer(state.radiusCircle);
@@ -140,16 +139,16 @@ function rerender() {
     return;
   }
 
-  const radius = parseFloat($("radius").value);
-  const distMin = parseFloat($("dist-min").value);
-  const distMax = parseFloat($("dist-max").value);
-  const maxKph = parseFloat($("max-speed").value);
-  const minPacePerKm = parseFloat($("min-pace").value);
+  const radiusMi = parseFloat($("radius").value);
+  const radiusKm = radiusMi * KM_PER_MI;
+  const distMinKm = parseFloat($("dist-min").value) * KM_PER_MI;
+  const distMaxKm = parseFloat($("dist-max").value) * KM_PER_MI;
+  const maxKph = parseFloat($("max-speed").value) * KM_PER_MI;
+  const minPaceMinPerKm = parseFloat($("min-pace").value) / KM_PER_MI;
 
-  // draw center + radius
   state.centerMarker = L.marker(state.center).addTo(map);
   state.radiusCircle = L.circle(state.center, {
-    radius: radius * 1000,
+    radius: radiusKm * 1000,
     color: "#fc4c02", weight: 1, fillOpacity: 0.05
   }).addTo(map);
 
@@ -159,21 +158,20 @@ function rerender() {
 
   const matches = state.segments.filter(s => {
     if (s.type !== state.sport) return false;
-    if (!s[recordKey]) return false;  // segment has no record time
+    if (!s[recordKey]) return false;
     if (!s.start) return false;
     const d = haversineKm(state.center, s.start);
-    if (d > radius) return false;
+    if (d > radiusKm) return false;
     const distKm = s.dist_m / 1000;
-    if (distKm < distMin || distKm > distMax) return false;
+    if (distKm < distMinKm || distKm > distMaxKm) return false;
     if (state.sport === "Ride") {
       if (s[speedKey] > maxKph) return false;
     } else {
-      if (s[paceKey] < minPacePerKm) return false;
+      if (s[paceKey] < minPaceMinPerKm) return false;
     }
     return true;
   });
 
-  // sort: for rides, slowest-first (softest speed); for runs, slowest pace
   matches.sort((a, b) => {
     if (state.sport === "Ride") return a[speedKey] - b[speedKey];
     return b[paceKey] - a[paceKey];
@@ -181,37 +179,32 @@ function rerender() {
 
   $("results-count").textContent = `${matches.length} segments match.`;
 
-  // render map layers
   for (const s of matches) {
     if (!s.poly) continue;
     let coords;
     try { coords = decodePolyline(s.poly); } catch { continue; }
     const line = L.polyline(coords, { color: "#fc4c02", weight: 3, opacity: 0.8 });
-    const popup = renderPopup(s);
-    line.bindPopup(popup);
+    line.bindPopup(renderPopup(s));
     line.addTo(map);
     state.segLayers.push(line);
   }
 
-  // render result list (top 50)
   const list = $("results");
   list.innerHTML = "";
   for (const s of matches.slice(0, 50)) {
     const div = document.createElement("div");
     div.className = "result";
     const recStr = state.record === "qom" ? s.qom_str : s.kom_str;
-    const distKm = (s.dist_m / 1000).toFixed(2);
+    const distMi = (s.dist_m / 1000 / KM_PER_MI).toFixed(2);
     let rate;
     if (state.sport === "Ride") {
-      rate = `${s[speedKey].toFixed(1)} km/h`;
+      rate = `${kphToMph(s[speedKey]).toFixed(1)} mph`;
     } else {
-      const mins = Math.floor(s[paceKey]);
-      const secs = Math.round((s[paceKey] - mins) * 60);
-      rate = `${mins}:${secs.toString().padStart(2, "0")}/km`;
+      rate = `${formatPaceMinPerMile(s[paceKey])}/mi`;
     }
     div.innerHTML = `
       <div class="name">${s.name || "(unnamed)"}</div>
-      <div class="meta">${distKm} km &middot; ${(s.grade || 0).toFixed(1)}% &middot; ${state.record.toUpperCase()} ${recStr} &middot; ${rate}</div>
+      <div class="meta">${distMi} mi &middot; ${(s.grade || 0).toFixed(1)}% &middot; ${state.record.toUpperCase()} ${recStr} &middot; ${rate}</div>
     `;
     div.addEventListener("click", () => {
       if (s.start) map.setView(s.start, 16);
@@ -222,20 +215,17 @@ function rerender() {
 
 function renderPopup(s) {
   const recStr = state.record === "qom" ? s.qom_str : s.kom_str;
-  const distKm = (s.dist_m / 1000).toFixed(2);
+  const distMi = (s.dist_m / 1000 / KM_PER_MI).toFixed(2);
   let rate;
   if (state.sport === "Ride") {
-    rate = `${s[state.record + "_kph"].toFixed(1)} km/h`;
+    rate = `${kphToMph(s[state.record + "_kph"]).toFixed(1)} mph`;
   } else {
-    const p = s[state.record + "_min_per_km"];
-    const mins = Math.floor(p);
-    const secs = Math.round((p - mins) * 60);
-    rate = `${mins}:${secs.toString().padStart(2, "0")} min/km`;
+    rate = `${formatPaceMinPerMile(s[state.record + "_min_per_km"])} min/mi`;
   }
   return `
     <b>${s.name || "(unnamed)"}</b><br>
-    ${s.type} &middot; ${distKm} km &middot; ${(s.grade || 0).toFixed(1)}% grade<br>
-    ${s.type === "Ride" ? "QOM" : "QOM"}: ${recStr} (${rate})<br>
+    ${s.type} &middot; ${distMi} mi &middot; ${(s.grade || 0).toFixed(1)}% grade<br>
+    ${state.record.toUpperCase()}: ${recStr} (${rate})<br>
     ${s.effort_count || 0} efforts by ${s.athlete_count || 0} athletes<br>
     <a href="https://www.strava.com/segments/${s.id}" target="_blank">Open on Strava</a>
   `;
