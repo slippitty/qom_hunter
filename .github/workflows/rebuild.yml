@@ -46,5 +46,8 @@ jobs:
             echo "No changes to commit."
           else
             git commit -m "Auto-rebuild dataset ($(date -u +%Y-%m-%d))"
+            # Pull any commits that landed on main while we were building,
+            # rebasing our auto-commit on top before pushing.
+            git pull --rebase origin main
             git push
           fi
