@@ -45,6 +45,8 @@ bindRange("dist-min", "dist-min-val", v => (+v).toFixed(2));
 bindRange("dist-max", "dist-max-val", v => (+v).toFixed(2));
 bindRange("max-speed", "max-speed-val");
 bindRange("min-pace", "min-pace-val", v => (+v).toFixed(1));
+bindRange("max-athletes", "max-athletes-val");
+$("hide-glitches").addEventListener("change", rerender);
 
 document.querySelectorAll(".sport-btn").forEach(b => {
   b.addEventListener("click", () => {
@@ -145,6 +147,13 @@ function rerender() {
   const distMaxKm = parseFloat($("dist-max").value) * KM_PER_MI;
   const maxKph = parseFloat($("max-speed").value) * KM_PER_MI;
   const minPaceMinPerKm = parseFloat($("min-pace").value) / KM_PER_MI;
+  const maxAthletes = parseInt($("max-athletes").value, 10);
+  const hideGlitches = $("hide-glitches").checked;
+
+  // physical ceilings beyond which the record is almost certainly a GPS error
+  const RIDE_GLITCH_KPH = 60.0;       // ~37 mph; elite track sprints don't sustain this
+  const RUN_GLITCH_MIN_PER_KM = 2.5;  // ~4:00/mi pace; faster than the world mile record
+  const MIN_PLAUSIBLE_DIST_M = 150;
 
   state.centerMarker = L.marker(state.center).addTo(map);
   state.radiusCircle = L.circle(state.center, {
@@ -160,6 +169,12 @@ function rerender() {
     if (s.type !== state.sport) return false;
     if (!s[recordKey]) return false;
     if (!s.start) return false;
+    if ((s.athlete_count || 0) > maxAthletes) return false;
+    if (hideGlitches) {
+      if (s.dist_m < MIN_PLAUSIBLE_DIST_M) return false;
+      if (state.sport === "Ride" && s[speedKey] > RIDE_GLITCH_KPH) return false;
+      if (state.sport === "Run" && s[paceKey] < RUN_GLITCH_MIN_PER_KM) return false;
+    }
     const d = haversineKm(state.center, s.start);
     if (d > radiusKm) return false;
     const distKm = s.dist_m / 1000;
@@ -204,7 +219,7 @@ function rerender() {
     }
     div.innerHTML = `
       <div class="name">${s.name || "(unnamed)"}</div>
-      <div class="meta">${distMi} mi &middot; ${(s.grade || 0).toFixed(1)}% &middot; ${state.record.toUpperCase()} ${recStr} &middot; ${rate}</div>
+      <div class="meta">${distMi} mi &middot; ${(s.grade || 0).toFixed(1)}% &middot; ${state.record.toUpperCase()} ${recStr} &middot; ${rate} &middot; ${s.athlete_count || 0} athletes</div>
     `;
     div.addEventListener("click", () => {
       if (s.start) map.setView(s.start, 16);

@@ -26,6 +26,9 @@ aside#panel p.sub { margin: 0 0 20px 0; color: #666; font-size: 13px; }
 .seg-toggle button { flex: 1; padding: 8px; border: 1px solid #ccc; background: white; cursor: pointer; font-size: 13px; border-radius: 4px; }
 .seg-toggle button.active { background: #fc4c02; color: white; border-color: #fc4c02; }
 
+.checkbox-label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: normal; text-transform: none; letter-spacing: 0; color: #222; cursor: pointer; }
+.checkbox-label input { margin: 0; }
+
 #results-count { font-size: 13px; color: #666; margin: 12px 0 8px 0; font-weight: 500; }
 #results { font-size: 13px; max-height: 300px; overflow-y: auto; border-top: 1px solid #eee; }
 .result { padding: 8px 0; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
