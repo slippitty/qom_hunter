@@ -1,0 +1,50 @@
+name: Rebuild dataset
+
+on:
+  schedule:
+    # Sundays at 7:00 UTC (3am ET in summer, 2am ET in winter)
+    - cron: '0 7 * * 0'
+  workflow_dispatch:  # also lets you trigger it manually from the Actions tab
+
+permissions:
+  contents: write  # so the action can commit segments.json back to the repo
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350  # under the 6-hour cap, generous for incremental builds
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Build dataset
+        env:
+          STRAVA_CLIENT_ID:     ${{ secrets.STRAVA_CLIENT_ID }}
+          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+          STRAVA_REFRESH_TOKEN: ${{ secrets.STRAVA_REFRESH_TOKEN }}
+        run: |
+          python -m src.build_dataset || true
+          # `|| true` so we still commit partial progress if the script
+          # exits non-zero (e.g. hit Strava daily cap mid-run). The next
+          # weekly run resumes from the checkpoint.
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/segments.json docs/.dataset_checkpoint.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Auto-rebuild dataset ($(date -u +%Y-%m-%d))"
+            git push
+          fi

@@ -138,33 +138,44 @@ def get_access_token() -> str:
     """
     Return a live access token, refreshing if the current one is near expiry.
     Callers elsewhere in the app should only use this, never the raw file.
+
+    For headless / CI use (GitHub Actions), if no tokens.json exists on disk,
+    we fall back to a STRAVA_REFRESH_TOKEN env var. We mint a fresh access
+    token from it on every run and don't persist anything.
     """
     tokens = _load_tokens_if_exists()
-    if not tokens:
+    refresh_token = tokens.get("refresh_token") if tokens else os.environ.get("STRAVA_REFRESH_TOKEN")
+
+    if not refresh_token:
         raise RuntimeError(
-            "No tokens on disk. Run `python -m src.auth` once interactively first."
+            "No tokens on disk and STRAVA_REFRESH_TOKEN not in env. "
+            "Run `python -m src.auth` once interactively, or set the env var for headless use."
         )
 
-    # refresh if expired or within sixty seconds of expiry
-    if tokens["expires_at"] - 60 <= time.time():
-        r = requests.post(
-            "https://www.strava.com/oauth/token",
-            data={
-                "client_id": CLIENT_ID,
-                "client_secret": CLIENT_SECRET,
-                "grant_type": "refresh_token",
-                "refresh_token": tokens["refresh_token"],
-            },
-            timeout=30,
-        )
-        r.raise_for_status()
-        refreshed = r.json()
-        # preserve athlete_id across refreshes (not returned by the refresh call)
+    # if we have a fresh-enough access token on disk, just use it
+    if tokens and tokens.get("expires_at", 0) - 60 > time.time():
+        return tokens["access_token"]
+
+    # otherwise refresh
+    r = requests.post(
+        "https://www.strava.com/oauth/token",
+        data={
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+        },
+        timeout=30,
+    )
+    r.raise_for_status()
+    refreshed = r.json()
+
+    # if we have a tokens.json on disk, update it; otherwise just use in-memory
+    if tokens:
         refreshed.setdefault("athlete", {})["id"] = tokens.get("athlete_id")
         _save_tokens(refreshed)
-        tokens = _load_tokens_if_exists()
 
-    return tokens["access_token"]
+    return refreshed["access_token"]
 
 
 def get_athlete_id() -> int:

@@ -23,15 +23,25 @@ from pathlib import Path
 from .strava import explore_segments, get_segment
 
 ROOT = Path(__file__).parent.parent
-CHECKPOINT = ROOT / "data" / "dataset_checkpoint.json"
+CHECKPOINT = ROOT / "docs" / ".dataset_checkpoint.json"
 OUTPUT = ROOT / "docs" / "segments.json"
 
 # Region bounding box: southwest and northeast corners.
-# Covers Staten Island south tip to northern Yonkers, Jersey City west to
-# eastern Queens/Bronx.
-REGION_SW = (40.4960, -74.2700)
-REGION_NE = (40.9600, -73.7000)
-GRID = 8  # 8x8 tiles = 64 tiles, each ~6 km on a side
+# Default: Brooklyn + Manhattan, which fits comfortably in a single GitHub
+# Actions run. Expand later by adjusting these or by setting the
+# QOM_REGION_SW / QOM_REGION_NE env vars.
+import os as _os
+
+def _env_box(name, default):
+    v = _os.environ.get(name)
+    if not v:
+        return default
+    parts = [float(x) for x in v.split(",")]
+    return (parts[0], parts[1])
+
+REGION_SW = _env_box("QOM_REGION_SW", (40.5707, -74.0420))
+REGION_NE = _env_box("QOM_REGION_NE", (40.8200, -73.9100))
+GRID = int(_os.environ.get("QOM_GRID", "6"))
 ACTIVITY_TYPES = ("riding", "running")
 
 
