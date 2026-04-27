@@ -51,3 +51,47 @@ jobs:
             git pull --rebase origin main
             git push
           fi
+
+  enrich:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+        with:
+          # pull the latest main, including the segments.json the build job
+          # just committed
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Enrich from activities
+        env:
+          STRAVA_CLIENT_ID:     ${{ secrets.STRAVA_CLIENT_ID }}
+          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
+          STRAVA_REFRESH_TOKEN: ${{ secrets.STRAVA_REFRESH_TOKEN }}
+        run: |
+          # On a fresh checkpoint or after backfill, walks last 200 activities.
+          # Steady state: only walks activities newer than last_activity_id.
+          python -m src.enrich_from_activities --limit 200 || true
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/segments.json docs/.enrich_checkpoint.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Auto-enrich from activities ($(date -u +%Y-%m-%d))"
+            git pull --rebase origin main
+            git push
+          fi
