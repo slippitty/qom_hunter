@@ -160,7 +160,12 @@ def detail_phase(state: dict):
 
 
 def write_output(state: dict):
-    """Write the compact JSON the browser will load."""
+    """Write the compact JSON the browser will load.
+
+    Preserves any `from_activity: true` segments already in the existing
+    output file, so the scheduled rebuild doesn't clobber segments that came
+    from enrich_from_activities.
+    """
     records = []
     for d in state["details"].values():
         if not d.get("start") or not d.get("dist_m"):
@@ -175,10 +180,30 @@ def write_output(state: dict):
         d["qom_min_per_km"] = (qom_s / 60 / dist_km) if qom_s else None
         d["kom_min_per_km"] = (kom_s / 60 / dist_km) if kom_s else None
         records.append(d)
+
+    # preserve personal segments from the existing file, if any
+    preserved = 0
+    if OUTPUT.exists():
+        try:
+            existing = json.loads(OUTPUT.read_text())
+            existing_personal = [
+                s for s in existing.get("segments", [])
+                if s.get("from_activity")
+            ]
+            # avoid duplicating an id that's now in the explore set
+            new_ids = {r["id"] for r in records}
+            for s in existing_personal:
+                if s["id"] not in new_ids:
+                    records.append(s)
+                    preserved += 1
+        except Exception:
+            pass
+
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    # compact json, no indentation, to keep file size down
     OUTPUT.write_text(json.dumps({"segments": records, "built_at": int(time.time())}))
     print(f"\nWrote {len(records)} segments to {OUTPUT} ({OUTPUT.stat().st_size / 1024:.0f} KB).")
+    if preserved:
+        print(f"  ({preserved} personal segments preserved from prior enrichment)")
 
 
 def run():
