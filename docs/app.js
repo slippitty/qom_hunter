@@ -47,6 +47,7 @@ bindRange("max-speed", "max-speed-val");
 bindRange("min-pace", "min-pace-val", v => (+v).toFixed(1));
 bindRange("max-athletes", "max-athletes-val");
 $("hide-glitches").addEventListener("change", rerender);
+$("include-personal").addEventListener("change", rerender);
 
 document.querySelectorAll(".sport-btn").forEach(b => {
   b.addEventListener("click", () => {
@@ -149,6 +150,7 @@ function rerender() {
   const minPaceMinPerKm = parseFloat($("min-pace").value) / KM_PER_MI;
   const maxAthletes = parseInt($("max-athletes").value, 10);
   const hideGlitches = $("hide-glitches").checked;
+  const includePersonal = $("include-personal").checked;
 
   // physical ceilings beyond which the record is almost certainly a GPS error
   const RIDE_GLITCH_KPH = 60.0;       // ~37 mph; elite track sprints don't sustain this
@@ -167,6 +169,7 @@ function rerender() {
 
   const matches = state.segments.filter(s => {
     if (s.type !== state.sport) return false;
+    if (s.from_activity && !includePersonal) return false;
     if (!s[recordKey]) return false;
     if (!s.start) return false;
     if ((s.athlete_count || 0) > maxAthletes) return false;
